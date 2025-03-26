@@ -5,7 +5,7 @@ import json
 
 
 # API_BASE_URL = "http://localhost:8000"
-API_BASE_URL = "https://fastapi-for-render.onrender.com/"
+API_BASE_URL = "https://utkarsh134-fastapi-hackathonin2mins.hf.space"
 
 def init_session_state():
     if 'context' not in st.session_state:
