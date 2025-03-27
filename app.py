@@ -106,14 +106,26 @@ def reset_session():
     init_session_state()
 
 def main():
-    st.title("Hackathon Event Planner")
+
+    col1, col2 = st.columns([3, 1])  
+
+    with col1:
+        st.markdown("<h1>Sarv</h1>", unsafe_allow_html=True)
+        st.write("Make your Hackathon Live in 2 minutes!")
+        st.write("By Where U Elevate")
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+    with col2:
+        image_path = "Primary logo. (1).png"  
+        st.image(image_path, width=100)
     
+
     init_session_state()
-    
+
     if not st.session_state.started:
         st.session_state.messages.append({
             "role": "assistant",
-            "content": "Welcome to the Hackathon Event Planner! Let's get started with your event registration."
+            "content": "Welcome to Sarv! Let's get started with your event registration."
         })
         response = send_message("")
         if response:
@@ -156,7 +168,7 @@ def main():
                 reset_session()
                 st.rerun()
 
-    # Add a loading spinner for partner URL processing
+    # loading spinner for partner URL processing
     if st.session_state.current_question == "partnerUrl":
         st.markdown("""
             <style>
