@@ -56,26 +56,13 @@ def handle_chat_response(response: Dict[str, Any]):
     st.session_state.current_question = response.get("current_question")
     st.session_state.registration_complete = response.get("registration_complete", False)
 
+    # Display the assistant's message
     st.session_state.messages.append({
         "role": "assistant", 
         "content": response['message']
     })
     
-    if response.get("suggestions") and response.get("requires_selection"):
-        suggestions_text = "\n".join([
-            f"{i+1}. {suggestion}" 
-            for i, suggestion in enumerate(response["suggestions"])
-        ])
-        original_name = response.get("context", {}).get("original_name", "")
-        # selection_message = (
-        #     f"Here are some suggestions:\n{suggestions_text}\n\n"
-        #     f"You can choose one by number or type 'keep original' to use: {original_name}"
-        # )
-        # st.session_state.messages.append({
-        #     "role": "assistant", 
-        #     "content": selection_message
-        # })
-    
+    # Special handling for event completion and links
     if response.get("event_link"):
         partner_name = response.get("context", {}).get("hackathon_details", {}).get("drillPartnerName")
         success_message = (
@@ -137,9 +124,14 @@ def main():
             st.markdown(message["content"])
     
     if not st.session_state.registration_complete:
-        # Dynamic helper text based on current question
+        # Update helper text to include naming conversation
         helper_text = "Type your message here..."
-        if st.session_state.current_question == "partnerUrl":
+        if st.session_state.current_question == "drillName":
+            if st.session_state.context and st.session_state.context.get("in_naming_conversation"):
+                helper_text = "Chat with the naming assistant..."
+            else:
+                helper_text = "Enter a name for your event, or ask for help..."
+        elif st.session_state.current_question == "partnerUrl":
             helper_text = "Enter the partner organization's website URL (e.g., https://example.com)..."
         elif st.session_state.current_question == "drillName_selection":
             helper_text = "Enter a number to choose or type 'keep original'..."
@@ -193,6 +185,10 @@ def main():
         }
         .stChatMessage[data-role="user"] {
             background-color: #e3f2fd;
+        }
+        /* Add special styling for naming conversation */
+        .stChatMessage[data-naming-conversation="true"] {
+            border-left: 4px solid #4CAF50;
         }
         .stChatMessage a {
             color: #007bff;
