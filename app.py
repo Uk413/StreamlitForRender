@@ -2,16 +2,33 @@ import streamlit as st
 import requests
 from typing import Dict, Any
 import json
-
+import uuid
 
 # API_BASE_URL = "http://localhost:8000"
 API_BASE_URL = "https://utkarsh134-fastapi-hackathonin2mins.hf.space"
 
+EVENT_TYPES = [
+    "WORKSHOP",
+    "WEBINAR",
+    "MASTERCLASS",
+    "INNOVATIONHACKATHON",
+    "SQUADPROGRAM",
+    "CASESTUDY",
+    "HIRINGHACKATHON",
+    "INNOVATION",
+    "TECHCONFERENCES",
+    "BOOTCAMP",
+    "STARTUP",
+    "CONCLAVE",
+    "CONTRACTUAL",
+    "IDEATHON",
+    "INTERNALHACKATHON",
+    "SMARTINDIAHACKATHON"
+]
+
 def init_session_state():
-    if 'context' not in st.session_state:
-        st.session_state.context = None
     if 'current_question' not in st.session_state:
-        st.session_state.current_question = None
+        st.session_state.current_question = "drillSubCategory"
     if 'messages' not in st.session_state:
         st.session_state.messages = []
     if 'registration_complete' not in st.session_state:
@@ -19,14 +36,15 @@ def init_session_state():
     if 'started' not in st.session_state:
         st.session_state.started = False
     if 'session_id' not in st.session_state:
-        st.session_state.session_id = None
+        st.session_state.session_id = str(uuid.uuid4())
+    if 'show_event_types' not in st.session_state:
+        st.session_state.show_event_types = True
 
 def send_message(message: str) -> Dict[str, Any]:
     try:
         payload = {
             "session_id": st.session_state.session_id,
             "message": message,
-            "context": st.session_state.context,
             "current_question": st.session_state.current_question
         }
         
@@ -52,9 +70,12 @@ def handle_chat_response(response: Dict[str, Any]):
         return
 
     st.session_state.session_id = response.get("session_id")
-    st.session_state.context = response.get("context")
     st.session_state.current_question = response.get("current_question")
     st.session_state.registration_complete = response.get("registration_complete", False)
+    
+    # Hide event type buttons after they've been used
+    if st.session_state.current_question != "drillName":
+        st.session_state.show_event_types = False
 
     # Display the assistant's message
     st.session_state.messages.append({
@@ -64,10 +85,8 @@ def handle_chat_response(response: Dict[str, Any]):
     
     # Special handling for event completion and links
     if response.get("event_link"):
-        partner_name = response.get("context", {}).get("hackathon_details", {}).get("drillPartnerName")
         success_message = (
             "Your event has been successfully registered!"
-            + (f" with partner {partner_name}" if partner_name else "")
             + f"\nYou can access it here: {response['event_link']}"
         )
         st.session_state.messages.append({
@@ -81,6 +100,21 @@ def handle_chat_response(response: Dict[str, Any]):
                 "content": "Would you like to register another event? (Type 'yes' or 'no')"
             })
 
+def handle_event_type_selection(event_type):
+    # Add user's event type selection as a message
+    st.session_state.messages.append({
+        "role": "user", 
+        "content": event_type
+    })
+    
+    # Send the event type to the backend
+    response = send_message(event_type)
+    if response:
+        handle_chat_response(response)
+    
+    # Hide event type buttons after selection
+    st.session_state.show_event_types = False
+
 def reset_session():
     if st.session_state.session_id:
         try:
@@ -93,7 +127,6 @@ def reset_session():
     init_session_state()
 
 def main():
-
     col1, col2 = st.columns([3, 1])  
 
     with col1:
@@ -106,31 +139,46 @@ def main():
         image_path = "Primary logo. (1).png"  
         st.image(image_path, width=100)
     
-
     init_session_state()
 
+    # Initialize chat with welcome message and event type question
     if not st.session_state.started:
         st.session_state.messages.append({
             "role": "assistant",
             "content": "Welcome to Sarv! Let's get started with your event registration."
         })
-        response = send_message("")
-        if response:
-            handle_chat_response(response)
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": "What type of event do you want to host?"
+        })
         st.session_state.started = True
     
+    # Display chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
     
+    # Display event type selection buttons if showing event types
+    if st.session_state.show_event_types:
+        st.write("Please select an event type:")
+        
+        # Create a 4x4 grid of buttons for event types
+        cols = st.columns(4)
+        for i, event_type in enumerate(EVENT_TYPES):
+            col_index = i % 4
+            with cols[col_index]:
+                # Create a more user-friendly display name with spaces
+                display_name = " ".join([word.capitalize() for word in event_type.split()])
+                if st.button(display_name, key=f"btn_{event_type}"):
+                    handle_event_type_selection(event_type)
+                    st.rerun()
+    
+    # Handle subsequent interactions if not complete
     if not st.session_state.registration_complete:
-        # Update helper text to include naming conversation
+        # Update helper text based on current question
         helper_text = "Type your message here..."
         if st.session_state.current_question == "drillName":
-            if st.session_state.context and st.session_state.context.get("in_naming_conversation"):
-                helper_text = "Chat with the naming assistant..."
-            else:
-                helper_text = "Enter a name for your event, or ask for help..."
+            helper_text = "Enter a name for your event, or ask for help..."
         elif st.session_state.current_question == "partnerUrl":
             helper_text = "Enter the partner organization's website URL (e.g., https://example.com)..."
         elif st.session_state.current_question == "drillName_selection":
@@ -153,14 +201,22 @@ def main():
         if user_input := st.chat_input("Type 'yes' to start new registration or 'no' to end"):
             if user_input.lower() in ['no', 'n']:
                 st.session_state.messages.append({
+                    "role": "user",
+                    "content": user_input
+                })
+                st.session_state.messages.append({
                     "role": "assistant",
-                    "content": "Thank you for using the Hackathon Registration Chatbot! Have a great day!"
+                    "content": "Thank you for using Sarv! Have a great day!"
                 })
             else:
+                st.session_state.messages.append({
+                    "role": "user",
+                    "content": user_input
+                })
                 reset_session()
                 st.rerun()
 
-    # loading spinner for partner URL processing
+    # Loading spinner for partner URL processing
     if st.session_state.current_question == "partnerUrl":
         st.markdown("""
             <style>
@@ -173,32 +229,91 @@ def main():
             </style>
         """, unsafe_allow_html=True)
 
+    # CSS styling for chat interface
     st.markdown("""
-        <style>
+    <style>
+    /* Base styles */
+    .stChatMessage {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        color: #000000;
+    }
+
+    .stChatMessage[data-role="assistant"] {
+        background-color: #f0f2f6;
+    }
+
+    .stChatMessage[data-role="user"] {
+        background-color: #e3f2fd;
+    }
+
+    .stChatMessage[data-naming-conversation="true"] {
+        border-left: 4px solid #4CAF50;
+    }
+
+    .stChatMessage a {
+        color: #007bff;
+        text-decoration: none;
+    }
+
+    .stChatMessage a:hover {
+        text-decoration: underline;
+    }
+
+    .stButton button {
+        width: 100%;
+        margin-bottom: 8px;
+        border-radius: 4px;
+        background-color: #f0f2f6;
+        border: 1px solid #dbe1e9;
+        padding: 6px 10px;
+        font-size: 0.9em;
+        color: #000000;
+        text-transform: uppercase;
+        font-weight: 600;
+    }
+
+    .stButton button:hover {
+        background-color: #dbe1e9;
+    }
+
+    /* Dark mode styles */
+    @media (prefers-color-scheme: dark) {
         .stChatMessage {
-            padding: 1rem;
-            border-radius: 0.5rem;
-            margin-bottom: 1rem;
+            color: #f1f1f1;
         }
+
         .stChatMessage[data-role="assistant"] {
-            background-color: #f0f2f6;
+            background-color: #1f2937;
         }
+
         .stChatMessage[data-role="user"] {
-            background-color: #e3f2fd;
+            background-color: #374151;
         }
-        /* Add special styling for naming conversation */
+
         .stChatMessage[data-naming-conversation="true"] {
-            border-left: 4px solid #4CAF50;
+            border-left: 4px solid #10b981;
         }
+
         .stChatMessage a {
-            color: #007bff;
-            text-decoration: none;
+            color: #60a5fa;
         }
-        .stChatMessage a:hover {
-            text-decoration: underline;
+
+        .stButton button {
+            background-color: #374151;
+            border: 1px solid #4b5563;
+            color: #f1f1f1;
+            text-transform: uppercase;
+            font-weight: 600;
         }
-        </style>
-    """, unsafe_allow_html=True)
+
+        .stButton button:hover {
+            background-color: #4b5563;
+        }
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
